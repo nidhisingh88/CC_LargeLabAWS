@@ -17,43 +17,51 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import com.sun.jersey.core.header.FormDataContentDisposition;
 import com.sun.jersey.multipart.FormDataParam;
 import com.xuggle.mediatool.IMediaReader;
 import com.xuggle.mediatool.ToolFactory;
 
 @Path("/converter")
 public class ConverterResource {
-	
+
 	@Context ServletContext sc;
 	@POST
 	@Path("/video")
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
-	public Response uploadFile(@FormDataParam("fileToUpload[]") InputStream uploadedInputStream,
-			                   @FormDataParam("fileToUpload[]") FormDataContentDisposition fileDetail
-			                   )
+	/**
+	 * 
+	 * @param inputStream
+	 * @param inputFileName
+	 * @param outputFormat
+	 * @return
+	 */
+	public Response Converter(@FormDataParam("inputFileStream") InputStream inputStream,
+			                   @FormDataParam("inputFileName") String inputFileName,
+			                   @FormDataParam("outputFormat") String outputFormat)
 	{
 		
 		//locate the temp dir for storing input video file
 		File tempDir = (File) sc.getAttribute("javax.servlet.context.tempdir");
+		String tempPath = tempDir.getAbsolutePath();
 		
-		String tempPath = sc.getRealPath(tempDir.getPath());
-
 		//create File for input
-		File inputFile = new File(tempPath + "\\" + fileDetail.getFileName());
+		File inputFile = new File(tempPath + "/" + inputFileName);
 		
 		try {
 			inputFile.createNewFile();
 		} catch (IOException e) {
-			inputFile.delete();
-			return Response.serverError().build();
+			return ErrorResponse("IOException: Failed to create input file.");
 		}
 		
 		//load data in input file
-		saveToFile(uploadedInputStream,inputFile);
+		try {
+			saveToFile(inputStream,inputFile);
+		} catch (Exception e) {
+			return ErrorResponse("InputStream cannot be saved to file.");
+		}
 		
 		//determine where the output file will be stored
-		String outputLoc = tempPath + "\\output" + ".mov";
+		String outputLoc = tempPath + "/output" + outputFormat;
 		
 		convertVideo(inputFile.getPath(),outputLoc);
 		
@@ -68,31 +76,33 @@ public class ConverterResource {
 			outputFile.delete();
 
 		} catch (FileNotFoundException e) {
-			return Response.serverError().build();
+			inputFile.delete();
+			return ErrorResponse("FileNotFoundException: Failed to read from output file");
 		}
 		return Response.ok().entity(fis).build();
 		
 	}
 	
-	// save uploaded file to new location
-	private void saveToFile(InputStream uploadedInputStream,
-		File f) {
+	/**
+	 * Stores an inputstream in a file.
+	 * @param InputStream inputStream
+	 * @param File f
+	 * @throws Exception
+	 */
+	protected void saveToFile(InputStream inputStream,
+		File f) throws Exception {
 
-		try {
 			OutputStream out = null;
 			int read = 0;
 			byte[] bytes = new byte[1024];
 
 			out = new FileOutputStream(f);
-			while ((read = uploadedInputStream.read(bytes)) != -1) {
+			while ((read = inputStream.read(bytes)) != -1) {
 				out.write(bytes, 0, read);
 			}
 			out.flush();
 			out.close();
-		} catch (IOException e) {
 
-			e.printStackTrace();
-		}
 
 	}
 	
@@ -102,12 +112,16 @@ public class ConverterResource {
 	 * @param iPath path of input file.
 	 * @param oPath path of output file.
 	 */
-	private void convertVideo(String iPath,String oPath){
+	protected void convertVideo(String iPath,String oPath){
 		 
 		
 		IMediaReader reader = ToolFactory.makeReader(iPath);
 		 reader.addListener(ToolFactory.makeWriter(oPath, reader));
 		 while (reader.readPacket() == null);
+	}
+	
+	protected Response ErrorResponse(String msg) {
+		return Response.serverError().entity(msg).build();
 	}
 	
 
