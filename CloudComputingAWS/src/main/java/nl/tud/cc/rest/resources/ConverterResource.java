@@ -47,6 +47,9 @@ public class ConverterResource {
 		//create File for input
 		File inputFile = new File(tempPath + "/" + inputFileName);
 		
+	    //check whether file already exists if so add a number to it to make the file unique
+		determineUniqueFilePath(inputFile);
+		
 		try {
 			inputFile.createNewFile();
 		} catch (IOException e) {
@@ -61,7 +64,7 @@ public class ConverterResource {
 		}
 		
 		//determine where the output file will be stored
-		String outputLoc = tempPath + "/output" + outputFormat;
+		String outputLoc = inputFile.getAbsolutePath() + outputFormat;
 		
 		convertVideo(inputFile.getPath(),outputLoc);
 		
@@ -124,6 +127,18 @@ public class ConverterResource {
 		return Response.serverError().entity(msg).build();
 	}
 	
+	protected void determineUniqueFilePath(File file){
+		
+		String defaultPath = file.getAbsolutePath();
+		for(int i=0; i <= Integer.MAX_VALUE; i++){
+			if(file.exists()){
+				file.renameTo(new File(defaultPath + "(" + i + ")"));
+			}
+			else{
+				break;
+			}
+		}
+	}
 
 	
 }
